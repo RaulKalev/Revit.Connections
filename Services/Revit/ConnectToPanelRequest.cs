@@ -15,20 +15,26 @@ namespace Connections.Services.Revit
         private readonly bool _connectIndividually;
         private readonly string _circuitParamName;
         private readonly string _circuitParamValue;
+        private readonly double _maxCableLengthMeters;
         private readonly Action<string> _onComplete;
+        private readonly Action<IEnumerable<ElementId>> _onHighlighted;
 
         public ConnectToPanelRequest(
             ElementId panelId,
             bool connectIndividually,
             string circuitParamName,
             string circuitParamValue,
-            Action<string> onComplete)
+            double maxCableLengthMeters,
+            Action<string> onComplete,
+            Action<IEnumerable<ElementId>> onHighlighted = null)
         {
             _panelId = panelId;
             _connectIndividually = connectIndividually;
             _circuitParamName = circuitParamName;
             _circuitParamValue = circuitParamValue;
+            _maxCableLengthMeters = maxCableLengthMeters;
             _onComplete = onComplete;
+            _onHighlighted = onHighlighted;
         }
 
         public void Execute(UIApplication app)
@@ -112,16 +118,21 @@ namespace Connections.Services.Revit
                                     }
 
                                     successCount++;
+                                    tx.Commit();
+
+                                    // Check cable length against this circuit's actual routed length
+                                    if (_maxCableLengthMeters > 0)
+                                    {
+                                        CheckAndHighlightCableLength(doc, uidoc.ActiveView, elecSystem,
+                                            new List<Element> { element }, _maxCableLengthMeters, sb);
+                                    }
                                 }
                                 else
                                 {
                                     sb.AppendLine($"  {element.Name} (Id:{element.Id}) - Failed to create circuit.");
                                     failCount++;
                                     tx.RollBack();
-                                    continue;
                                 }
-
-                                tx.Commit();
                             }
                         }
                         catch (Exception ex)
@@ -166,14 +177,20 @@ namespace Connections.Services.Revit
                                 }
 
                                 successCount = elements.Count;
+                                tx.Commit();
+
+                                if (_maxCableLengthMeters > 0)
+                                {
+                                    CheckAndHighlightCableLength(doc, uidoc.ActiveView, elecSystem,
+                                        elements, _maxCableLengthMeters, sb);
+                                }
                             }
                             else
                             {
                                 sb.AppendLine("Failed to create combined circuit.");
                                 failCount = elements.Count;
+                                tx.RollBack();
                             }
-
-                            tx.Commit();
                         }
                     }
                     catch (Exception ex)
@@ -194,6 +211,56 @@ namespace Connections.Services.Revit
             catch (Exception ex)
             {
                 _onComplete?.Invoke($"Error: {ex.Message}");
+            }
+        }
+
+        private void CheckAndHighlightCableLength(
+            Document doc,
+            View activeView,
+            ElectricalSystem circuit,
+            List<Element> elements,
+            double maxMeters,
+            StringBuilder sb)
+        {
+            try
+            {
+                // Read the circuit's actual Length parameter (computed by Revit after SelectPanel)
+                // The "Length" parameter on ElectricalSystem is stored in internal Revit units (decimal feet)
+                var lengthParam = circuit.LookupParameter("Length");
+                if (lengthParam == null || lengthParam.StorageType != StorageType.Double)
+                {
+                    sb.AppendLine("  [CableCheck] Length parameter not found on circuit.");
+                    return;
+                }
+
+                double lengthMeters = UnitUtils.ConvertFromInternalUnits(
+                    lengthParam.AsDouble(),
+                    UnitTypeId.Meters);
+
+                sb.AppendLine($"  [CableCheck] Circuit length: {lengthMeters:F1} m (limit {maxMeters} m)");
+
+                if (lengthMeters > maxMeters)
+                {
+                    sb.AppendLine($"  \u26a0 Cable length {lengthMeters:F1} m exceeds limit of {maxMeters} m \u2014 elements highlighted.");
+
+                    var overrides = new OverrideGraphicSettings();
+                    var orange = new Color(255, 140, 0);
+                    overrides.SetProjectionLineColor(orange);
+                    overrides.SetSurfaceForegroundPatternColor(orange);
+
+                    using (var tx = new Transaction(doc, "Highlight Cable Length Exceeded"))
+                    {
+                        tx.Start();
+                        foreach (var element in elements)
+                            activeView.SetElementOverrides(element.Id, overrides);
+                        tx.Commit();
+                    }
+                    _onHighlighted?.Invoke(elements.Select(e => e.Id));
+                }
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine($"  [CableCheck] Error: {ex.Message}");
             }
         }
 

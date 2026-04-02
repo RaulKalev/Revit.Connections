@@ -23,8 +23,9 @@ namespace Connections.UI
         private const string PanelKey          = "ConnectionsWindow.Panel";
         private const string ParamNameKey      = "ConnectionsWindow.ParamName";
         private const string ParamValueKey     = "ConnectionsWindow.ParamValue";
-        private const string ConnectModeKey    = "ConnectionsWindow.ConnectIndividually";
-        private const string ConnectionLimitKey = "ConnectionsWindow.ConnectionLimit";
+        private const string ConnectModeKey      = "ConnectionsWindow.ConnectIndividually";
+        private const string ConnectionLimitKey   = "ConnectionsWindow.ConnectionLimit";
+        private const string MaxCableLengthKey    = "ConnectionsWindow.MaxCableLength";
 
         [DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -40,6 +41,7 @@ namespace Connections.UI
         private readonly Services.Revit.RevitExternalEventService _externalEventService;
         private List<PanelItem> _allPanels = new List<PanelItem>();
         private int _sessionConnectionCount;
+        private readonly List<Autodesk.Revit.DB.ElementId> _highlightedElementIds = new List<Autodesk.Revit.DB.ElementId>();
 
         #endregion
 
@@ -161,6 +163,7 @@ namespace Connections.UI
             string paramName  = CircuitParamNameBox.Text?.Trim();
             string paramValue = CircuitParamValueBox.Text;
             bool connectIndividually = ConnectIndividuallyCheck.IsChecked == true;
+            double maxCableLength = GetMaxCableLength();
 
             // Persist state
             SaveState();
@@ -176,6 +179,7 @@ namespace Connections.UI
                 connectIndividually,
                 paramName,
                 paramValue,
+                maxCableLength,
                 (result) =>
                 {
                     this.Show();
@@ -188,6 +192,16 @@ namespace Connections.UI
 
                     // Refresh existing connections count
                     UpdateExistingConnectionsCount();
+
+                    // Show cable length warning popup if any warnings are present
+                    ShowCableLengthWarningsIfAny(result);
+                },
+                (ids) =>
+                {
+                    foreach (var id in ids)
+                        if (!_highlightedElementIds.Contains(id))
+                            _highlightedElementIds.Add(id);
+                    ClearWarningsButton.Visibility = Visibility.Visible;
                 });
 
             _externalEventService.Raise(request);
@@ -229,9 +243,58 @@ namespace Connections.UI
             UpdateSessionCounterDisplay();
         }
 
+        private void ClearWarningsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_highlightedElementIds.Count == 0) return;
+
+            var ids = _highlightedElementIds.ToList();
+            var request = new Services.Revit.ClearWarningOverridesRequest(ids, () =>
+            {
+                _highlightedElementIds.Clear();
+                ClearWarningsButton.Visibility = Visibility.Collapsed;
+            });
+            _externalEventService.Raise(request);
+        }
+
+        private void ShowCableLengthWarningsIfAny(string result)
+        {
+            var warnings = new List<string>();
+            foreach (var line in result.Split('\n'))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("⚠"))
+                    warnings.Add(trimmed.TrimStart('⚠').Trim());
+            }
+
+            if (warnings.Count > 0)
+            {
+                var popup = new CableLengthWarningWindow(warnings)
+                {
+                    Owner = this
+                };
+                popup.Show();
+            }
+        }
+
         private void ConnectionLimitBox_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
         {
             e.Handled = !int.TryParse(e.Text, out _);
+        }
+
+        private void NumericOnly_PreviewTextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        {
+            e.Handled = !int.TryParse(e.Text, out _) && !double.TryParse(e.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out _);
+        }
+
+        private double GetMaxCableLength()
+        {
+            if (double.TryParse(MaxCableLengthBox.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0)
+                return v;
+            return 0;
         }
 
         #endregion
@@ -253,6 +316,12 @@ namespace Connections.UI
                     var limitStr = rawLimit.ToString();
                     if (!string.IsNullOrEmpty(limitStr))
                         ConnectionLimitBox.Text = limitStr;
+                }
+                if (config.TryGetValue(MaxCableLengthKey, out var rawCableLen) && rawCableLen != null)
+                {
+                    var cableStr = rawCableLen.ToString();
+                    if (!string.IsNullOrEmpty(cableStr))
+                        MaxCableLengthBox.Text = cableStr;
                 }
                 if (TryGetBool(config, ConnectModeKey, out bool isIndividual))
                 {
@@ -279,8 +348,9 @@ namespace Connections.UI
                 var cfg = LoadConfig();
                 cfg[ParamNameKey]   = CircuitParamNameBox.Text ?? string.Empty;
                 cfg[ParamValueKey]  = CircuitParamValueBox.Text ?? string.Empty;
-                cfg[ConnectModeKey] = ConnectIndividuallyCheck.IsChecked == true;
-                cfg[ConnectionLimitKey] = ConnectionLimitBox.Text ?? "0";
+                cfg[ConnectModeKey]      = ConnectIndividuallyCheck.IsChecked == true;
+                cfg[ConnectionLimitKey]  = ConnectionLimitBox.Text ?? "0";
+                cfg[MaxCableLengthKey]   = MaxCableLengthBox.Text ?? "0";
 
                 string panelName = (PanelComboBox.SelectedItem as PanelItem)?.Name ?? string.Empty;
                 cfg[PanelKey] = panelName ?? string.Empty;

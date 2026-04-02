@@ -112,9 +112,10 @@
                         <RowDefinition Height="Auto" /> <!-- 2: ComboBox -->
                         <RowDefinition Height="Auto" /> <!-- 3: Existing connections text -->
                         <RowDefinition Height="6" />    <!-- 4: spacing -->
-                        <RowDefinition Height="Auto" /> <!-- 5: Connection Limit label -->
-                        <RowDefinition Height="6" />    <!-- 6: spacing -->
-                        <RowDefinition Height="Auto" /> <!-- 7: Connection Limit TextBox -->
+                        <!-- Connection Limit + Max Cable Length side by side -->
+                        <RowDefinition Height="Auto" /> <!-- 5: labels row -->
+                        <RowDefinition Height="4" />    <!-- 6: spacing -->
+                        <RowDefinition Height="Auto" /> <!-- 7: inputs row -->
                         <RowDefinition Height="16" />   <!-- 8: spacing -->
                         <RowDefinition Height="Auto" /> <!-- 9: Param Name label -->
                         <RowDefinition Height="6" />    <!-- 10: spacing -->
@@ -129,8 +130,10 @@
                         <RowDefinition Height="Auto" /> <!-- 19: Session counter -->
                         <RowDefinition Height="16" />   <!-- 20: spacing -->
                         <RowDefinition Height="Auto" /> <!-- 21: Button -->
-                        <RowDefinition Height="10" />   <!-- 22: spacing -->
-                        <RowDefinition Height="*" />    <!-- 23: Result text -->
+                        <RowDefinition Height="6" />    <!-- 22: spacing -->
+                        <RowDefinition Height="Auto" /> <!-- 23: Clear Warnings button -->
+                        <RowDefinition Height="10" />   <!-- 24: spacing -->
+                        <RowDefinition Height="*" />    <!-- 25: Result text -->
                     </Grid.RowDefinitions>
 
                     <!-- Panel label -->
@@ -156,19 +159,43 @@
                                FontSize="10" Opacity="0.7"
                                Margin="0,2,0,0" />
 
-                    <!-- Connection Limit label -->
-                    <TextBlock Grid.Row="5"
-                               Text="Connection Limit (0 = unlimited)"
-                               Foreground="{DynamicResource ForegroundBrush}"
-                               FontSize="11" FontWeight="SemiBold" />
+                    <!-- Connection Limit + Max Cable Length labels (side by side) -->
+                    <Grid Grid.Row="5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Connection Limit (0=∞)"
+                                   Foreground="{DynamicResource ForegroundBrush}"
+                                   FontSize="11" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="2"
+                                   Text="Max Cable Length m (0=off)"
+                                   Foreground="{DynamicResource ForegroundBrush}"
+                                   FontSize="11" FontWeight="SemiBold" />
+                    </Grid>
 
-                    <!-- Connection Limit TextBox -->
-                    <TextBox Grid.Row="7"
-                             x:Name="ConnectionLimitBox"
-                             Text="0"
-                             Style="{StaticResource CustomTextBoxStyle}"
-                             HorizontalAlignment="Stretch"
-                             PreviewTextInput="ConnectionLimitBox_PreviewTextInput" />
+                    <!-- Connection Limit + Max Cable Length inputs (side by side) -->
+                    <Grid Grid.Row="7">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 x:Name="ConnectionLimitBox"
+                                 Text="0"
+                                 Style="{StaticResource CustomTextBoxStyle}"
+                                 HorizontalAlignment="Stretch"
+                                 PreviewTextInput="NumericOnly_PreviewTextInput" />
+                        <TextBox Grid.Column="2"
+                                 x:Name="MaxCableLengthBox"
+                                 Text="0"
+                                 Style="{StaticResource CustomTextBoxStyle}"
+                                 HorizontalAlignment="Stretch"
+                                 PreviewTextInput="NumericOnly_PreviewTextInput" />
+                    </Grid>
 
                     <!-- Circuit Parameter Name label -->
                     <TextBlock Grid.Row="9"
@@ -241,8 +268,21 @@
                             HorizontalAlignment="Stretch"
                             Height="34" />
 
+                    <!-- Clear Warnings button (visible only when highlights exist) -->
+                    <Button Grid.Row="23"
+                            x:Name="ClearWarningsButton"
+                            Content="Clear Warnings"
+                            Click="ClearWarningsButton_Click"
+                            Style="{StaticResource CustomActionButtonStyle}"
+                            Visibility="Collapsed"
+                            Width="Auto"
+                            HorizontalAlignment="Stretch"
+                            Height="28"
+                            FontSize="11"
+                            Opacity="0.85" />
+
                     <!-- Result text -->
-                    <ScrollViewer Grid.Row="23" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Grid.Row="25" VerticalScrollBarVisibility="Auto">
                         <TextBlock x:Name="ResultText"
                                    Foreground="{DynamicResource ForegroundBrush}"
                                    FontSize="12"

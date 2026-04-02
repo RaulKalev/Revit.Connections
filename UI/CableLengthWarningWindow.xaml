@@ -1,0 +1,116 @@
+<Window
+    x:Class="Connections.UI.CableLengthWarningWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="clr-namespace:Connections.UI"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    Title="Cable Length Warning"
+    Width="320"
+    Height="Auto"
+    SizeToContent="Height"
+    MinWidth="260"
+    AllowsTransparency="True"
+    Background="Transparent"
+    WindowStyle="None"
+    WindowStartupLocation="CenterOwner"
+    ResizeMode="NoResize">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary>
+                    <SolidColorBrush x:Key="PrimaryBackgroundBrush" Color="#FF1F1F1F" />
+                    <SolidColorBrush x:Key="BorderBrush" Color="#FFB85C00" />
+                    <SolidColorBrush x:Key="ForegroundBrush" Color="#EEEEEE" />
+                </ResourceDictionary>
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesignTheme.Dark.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Connections;component/UI/Themes/ElementStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Background="Transparent" ClipToBounds="True">
+        <!-- Outer glow border (orange tint) -->
+        <Border
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="2"
+            ClipToBounds="True"
+            CornerRadius="10"
+            Opacity="0.7"
+            SnapsToDevicePixels="True">
+            <Border.Effect>
+                <BlurEffect KernelType="Gaussian" Radius="2" />
+            </Border.Effect>
+        </Border>
+
+        <!-- Content container -->
+        <Border
+            Margin="2"
+            Background="{DynamicResource PrimaryBackgroundBrush}"
+            CornerRadius="10">
+            <StackPanel Margin="20,16,20,20">
+
+                <!-- Header row: icon + title -->
+                <DockPanel Margin="0,0,0,12" MouseDown="Header_MouseDown" Background="Transparent" Cursor="SizeAll">
+                    <Button DockPanel.Dock="Right"
+                            Width="22" Height="22"
+                            Background="Transparent" BorderBrush="Transparent"
+                            Click="CloseButton_Click"
+                            VerticalAlignment="Center">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Grid Background="Transparent">
+                                    <materialDesign:PackIcon Kind="Close"
+                                                             Width="14" Height="14"
+                                                             Foreground="{DynamicResource ForegroundBrush}"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center" />
+                                </Grid>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <materialDesign:PackIcon Kind="AlertCircleOutline"
+                                            Width="20" Height="20"
+                                            Foreground="#FFFF8C00"
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,8,0" />
+                    <TextBlock Text="Cable Length Exceeded"
+                               Foreground="#FFFF8C00"
+                               FontSize="13" FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </DockPanel>
+
+                <!-- Separator -->
+                <Border Height="1" Background="#33FFFFFF" Margin="0,0,0,12" />
+
+                <!-- Warning items list -->
+                <ItemsControl x:Name="WarningsListBox">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,3">
+                                <materialDesign:PackIcon Kind="AlertOutline"
+                                                         Width="14" Height="14"
+                                                         Foreground="#FFFF8C00"
+                                                         VerticalAlignment="Center"
+                                                         Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding}"
+                                           Foreground="{DynamicResource ForegroundBrush}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Dismiss button -->
+                <Button Content="Dismiss"
+                        Margin="0,16,0,0"
+                        Height="32"
+                        Click="CloseButton_Click"
+                        Style="{StaticResource CustomActionButtonStyle}"
+                        HorizontalAlignment="Stretch" />
+
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

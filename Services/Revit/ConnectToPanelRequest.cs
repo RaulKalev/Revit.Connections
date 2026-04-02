@@ -16,6 +16,7 @@ namespace Connections.Services.Revit
         private readonly string _circuitParamName;
         private readonly string _circuitParamValue;
         private readonly double _maxCableLengthMeters;
+        private readonly int _connectionLimit;
         private readonly Action<string> _onComplete;
         private readonly Action<IEnumerable<ElementId>> _onHighlighted;
 
@@ -25,6 +26,7 @@ namespace Connections.Services.Revit
             string circuitParamName,
             string circuitParamValue,
             double maxCableLengthMeters,
+            int connectionLimit,
             Action<string> onComplete,
             Action<IEnumerable<ElementId>> onHighlighted = null)
         {
@@ -33,6 +35,7 @@ namespace Connections.Services.Revit
             _circuitParamName = circuitParamName;
             _circuitParamValue = circuitParamValue;
             _maxCableLengthMeters = maxCableLengthMeters;
+            _connectionLimit = connectionLimit;
             _onComplete = onComplete;
             _onHighlighted = onHighlighted;
         }
@@ -45,6 +48,30 @@ namespace Connections.Services.Revit
 
             try
             {
+                var panel = doc.GetElement(_panelId) as FamilyInstance;
+                if (panel == null)
+                {
+                    _onComplete?.Invoke("Panel not found in model.");
+                    return;
+                }
+
+                // Check existing circuit count against the connection limit before prompting
+                if (_connectionLimit > 0)
+                {
+                    int existingCount = new FilteredElementCollector(doc)
+                        .OfClass(typeof(ElectricalSystem))
+                        .Cast<ElectricalSystem>()
+                        .Count(sys => sys.BaseEquipment?.Id == panel.Id);
+
+                    if (existingCount >= _connectionLimit)
+                    {
+                        _onComplete?.Invoke(
+                            $"\u26a0 Panel \u201c{panel.Name}\u201d has reached its connection limit ({existingCount} / {_connectionLimit}).\n" +
+                            $"Increase the limit or choose a different panel.");
+                        return;
+                    }
+                }
+
                 // Let user select elements
                 IList<Reference> refs;
                 try
@@ -71,12 +98,7 @@ namespace Connections.Services.Revit
                     .Where(e => e != null)
                     .ToList();
 
-                var panel = doc.GetElement(_panelId) as FamilyInstance;
-                if (panel == null)
-                {
-                    _onComplete?.Invoke("Panel not found in model.");
-                    return;
-                }
+                // panel already resolved above
 
                 int successCount = 0;
                 int failCount = 0;

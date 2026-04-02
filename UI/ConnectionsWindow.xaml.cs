@@ -164,6 +164,7 @@ namespace Connections.UI
             string paramValue = CircuitParamValueBox.Text;
             bool connectIndividually = ConnectIndividuallyCheck.IsChecked == true;
             double maxCableLength = GetMaxCableLength();
+            int connectionLimit  = GetConnectionLimit();
 
             // Persist state
             SaveState();
@@ -180,6 +181,7 @@ namespace Connections.UI
                 paramName,
                 paramValue,
                 maxCableLength,
+                connectionLimit,
                 (result) =>
                 {
                     this.Show();

@@ -6,7 +6,7 @@ A Revit add-in for quickly connecting electrical elements (security cameras, fir
 
 - **Panel Selection** – searchable ComboBox listing all electrical equipment panels in the active model
 - **Existing Connections Count** – displays the number of circuits already connected to the selected panel
-- **Connection Limit** – optional per-panel limit to prevent over-provisioning (0 = unlimited)
+- **Connection Limit** – optional per-panel limit; enforced against the actual model circuit count before selection opens — prevents over-provisioning and warns the user if the panel is already full (0 = unlimited)
 - **Max Cable Length** – set a maximum allowed cable length in metres; elements that exceed it are highlighted orange and a warning popup is shown (0 = off)
 - **Clear Warnings** – button that clears all orange highlights from the active view (appears only when highlights are present)
 - **Connect Individually** – creates a separate circuit for each selected element
@@ -16,6 +16,10 @@ A Revit add-in for quickly connecting electrical elements (security cameras, fir
 - **Session Counter** – tracks how many connections have been made in the current session, with a clear button
 - **Dark / Light Theme** – toggle between dark and light UI themes
 - **State Persistence** – remembers panel selection, parameter values, connection mode, limits, window position, and theme across sessions
+
+## Connection Limit Enforcement
+
+When **Connection Limit** is set to a value greater than 0, the plugin queries the model for existing circuits whose base equipment matches the selected panel before opening the element picker. If the panel has already reached its limit, the operation is cancelled immediately and the user is shown a warning with the current count. This prevents accidental over-connection without relying on the session counter alone.
 
 ## Cable Length Warning
 

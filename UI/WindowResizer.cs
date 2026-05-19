@@ -12,8 +12,8 @@ namespace Connections.UI
         private Point _startPoint;
         private bool _isResizing;
 
-        private const double MIN_WIDTH = 500;
-        private const double MIN_HEIGHT = 400;
+        private const double MIN_WIDTH = 220;
+        private const double MIN_HEIGHT = 380;
         public UIElement IgnoreElement { get; set; } // set this from MainWindow
 
         public WindowResizer(Window window)

@@ -27,6 +27,14 @@ namespace Connections.UI
         private const string ConnectionLimitKey   = "ConnectionsWindow.ConnectionLimit";
         private const string MaxCableLengthKey    = "ConnectionsWindow.MaxCableLength";
 
+        // Existing-tab config keys
+        private const string ExPanelKey           = "ConnectionsWindow.Ex.Panel";
+        private const string ExParamNameKey        = "ConnectionsWindow.Ex.ParamName";
+        private const string ExParamValueKey       = "ConnectionsWindow.Ex.ParamValue";
+        private const string ExConnectionLimitKey  = "ConnectionsWindow.Ex.ConnectionLimit";
+        private const string ExMaxCableLengthKey   = "ConnectionsWindow.Ex.MaxCableLength";
+        private const string SelectedTabKey         = "ConnectionsWindow.SelectedTab";
+
         [DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
@@ -42,6 +50,10 @@ namespace Connections.UI
         private List<PanelItem> _allPanels = new List<PanelItem>();
         private int _sessionConnectionCount;
         private readonly List<Autodesk.Revit.DB.ElementId> _highlightedElementIds = new List<Autodesk.Revit.DB.ElementId>();
+
+        // Existing-tab state
+        private int _exSessionConnectionCount;
+        private readonly List<Autodesk.Revit.DB.ElementId> _exHighlightedElementIds = new List<Autodesk.Revit.DB.ElementId>();
 
         #endregion
 
@@ -90,6 +102,8 @@ namespace Connections.UI
 
                 PanelComboBox.ItemsSource = _allPanels;
                 PanelComboBox.DisplayMemberPath = "Name";
+                Ex_PanelComboBox.ItemsSource = _allPanels;
+                Ex_PanelComboBox.DisplayMemberPath = "Name";
             }
             catch (Exception ex)
             {
@@ -301,6 +315,137 @@ namespace Connections.UI
 
         #endregion
 
+        #region Existing Tab
+
+        private void Ex_PanelComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            Ex_UpdateExistingConnectionsCount();
+            SaveState();
+        }
+
+        private void Ex_UpdateExistingConnectionsCount()
+        {
+            Ex_ExistingConnectionsText.Text = string.Empty;
+            try
+            {
+                if (!(Ex_PanelComboBox.SelectedItem is PanelItem selectedPanel)) return;
+
+                var doc = _uiApplication.ActiveUIDocument?.Document;
+                if (doc == null) return;
+
+                int count = new Autodesk.Revit.DB.FilteredElementCollector(doc)
+                    .OfClass(typeof(Autodesk.Revit.DB.Electrical.ElectricalSystem))
+                    .Cast<Autodesk.Revit.DB.Electrical.ElectricalSystem>()
+                    .Count(sys => sys.BaseEquipment?.Id == selectedPanel.ElementId);
+
+                Ex_ExistingConnectionsText.Text = $"Existing connections: {count}";
+            }
+            catch { }
+        }
+
+        private void ReassignButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(Ex_PanelComboBox.SelectedItem is PanelItem selectedPanel))
+            {
+                Ex_ResultText.Text = "Please select a valid panel.";
+                return;
+            }
+
+            string paramName  = Ex_CircuitParamNameBox.Text?.Trim();
+            string paramValue = Ex_CircuitParamValueBox.Text;
+            double maxCableLength = GetExMaxCableLength();
+            int connectionLimit  = GetExConnectionLimit();
+
+            SaveState();
+
+            Ex_ResultText.Text = string.Empty;
+            ReassignButton.IsEnabled = false;
+
+            this.Hide();
+
+            var request = new Services.Revit.ReassignToPanelRequest(
+                selectedPanel.ElementId,
+                paramName,
+                paramValue,
+                maxCableLength,
+                connectionLimit,
+                (result) =>
+                {
+                    this.Show();
+                    this.Activate();
+                    Ex_ResultText.Text = result;
+                    ReassignButton.IsEnabled = true;
+
+                    UpdateExSessionCounter(result);
+                    Ex_UpdateExistingConnectionsCount();
+                    ShowCableLengthWarningsIfAny(result);
+                },
+                (ids) =>
+                {
+                    foreach (var id in ids)
+                        if (!_exHighlightedElementIds.Contains(id))
+                            _exHighlightedElementIds.Add(id);
+                    Ex_ClearWarningsButton.Visibility = Visibility.Visible;
+                });
+
+            _externalEventService.Raise(request);
+        }
+
+        private void UpdateExSessionCounter(string result)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(result, @"(\d+)\s+succeeded");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int count) && count > 0)
+            {
+                _exSessionConnectionCount += count;
+                UpdateExSessionCounterDisplay();
+            }
+        }
+
+        private void UpdateExSessionCounterDisplay()
+        {
+            int limit = GetExConnectionLimit();
+            Ex_SessionCounterText.Text = limit > 0
+                ? $"Reassigned: {_exSessionConnectionCount} / {limit}"
+                : $"Reassigned: {_exSessionConnectionCount}";
+        }
+
+        private int GetExConnectionLimit()
+        {
+            if (int.TryParse(Ex_ConnectionLimitBox.Text, out int limit) && limit > 0)
+                return limit;
+            return 0;
+        }
+
+        private double GetExMaxCableLength()
+        {
+            if (double.TryParse(Ex_MaxCableLengthBox.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0)
+                return v;
+            return 0;
+        }
+
+        private void Ex_ClearCounterButton_Click(object sender, RoutedEventArgs e)
+        {
+            _exSessionConnectionCount = 0;
+            UpdateExSessionCounterDisplay();
+        }
+
+        private void Ex_ClearWarningsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_exHighlightedElementIds.Count == 0) return;
+
+            var ids = _exHighlightedElementIds.ToList();
+            var request = new Services.Revit.ClearWarningOverridesRequest(ids, () =>
+            {
+                _exHighlightedElementIds.Clear();
+                Ex_ClearWarningsButton.Visibility = Visibility.Collapsed;
+            });
+            _externalEventService.Raise(request);
+        }
+
+        #endregion
+
         #region State Persistence
 
         private void LoadSavedState()
@@ -338,6 +483,34 @@ namespace Connections.UI
                     else
                         PanelComboBox.Text = panelName;
                 }
+
+                // Existing tab
+                if (config.TryGetValue(ExParamNameKey, out var exRawName) && exRawName is string exS && !string.IsNullOrEmpty(exS))
+                    Ex_CircuitParamNameBox.Text = exS;
+                if (config.TryGetValue(ExParamValueKey, out var exRawVal) && exRawVal is string exV && !string.IsNullOrEmpty(exV))
+                    Ex_CircuitParamValueBox.Text = exV;
+                if (config.TryGetValue(ExConnectionLimitKey, out var exRawLimit) && exRawLimit != null)
+                {
+                    var s2 = exRawLimit.ToString();
+                    if (!string.IsNullOrEmpty(s2)) Ex_ConnectionLimitBox.Text = s2;
+                }
+                if (config.TryGetValue(ExMaxCableLengthKey, out var exRawCable) && exRawCable != null)
+                {
+                    var s3 = exRawCable.ToString();
+                    if (!string.IsNullOrEmpty(s3)) Ex_MaxCableLengthBox.Text = s3;
+                }
+                if (config.TryGetValue(ExPanelKey, out var exRawPanel) && exRawPanel is string exPanelName && !string.IsNullOrEmpty(exPanelName))
+                {
+                    var exMatch = _allPanels.FirstOrDefault(p => p.Name == exPanelName);
+                    if (exMatch != null)
+                        Ex_PanelComboBox.SelectedItem = exMatch;
+                    else
+                        Ex_PanelComboBox.Text = exPanelName;
+                }
+
+                if (config.TryGetValue(SelectedTabKey, out var rawTab) && rawTab != null &&
+                    int.TryParse(rawTab.ToString(), out int tabIndex) && tabIndex >= 0)
+                    MainTabControl.SelectedIndex = tabIndex;
             }
             catch { }
         }
@@ -357,6 +530,15 @@ namespace Connections.UI
                 string panelName = (PanelComboBox.SelectedItem as PanelItem)?.Name ?? string.Empty;
                 cfg[PanelKey] = panelName ?? string.Empty;
 
+                // Existing tab
+                cfg[ExParamNameKey]       = Ex_CircuitParamNameBox.Text ?? string.Empty;
+                cfg[ExParamValueKey]      = Ex_CircuitParamValueBox.Text ?? string.Empty;
+                cfg[ExConnectionLimitKey] = Ex_ConnectionLimitBox.Text ?? "0";
+                cfg[ExMaxCableLengthKey]  = Ex_MaxCableLengthBox.Text ?? "0";
+                cfg[ExPanelKey] = (Ex_PanelComboBox.SelectedItem as PanelItem)?.Name ?? string.Empty;
+
+                cfg[SelectedTabKey] = MainTabControl.SelectedIndex;
+
                 SaveConfig(cfg);
             }
             catch { }
@@ -370,6 +552,12 @@ namespace Connections.UI
         {
             SaveWindowState();
             SaveState();
+        }
+
+        private void MainTabControl_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (e.Source is System.Windows.Controls.TabControl)
+                SaveState();
         }
 
         private void TitleBar_Loaded(object sender, RoutedEventArgs e) { }
